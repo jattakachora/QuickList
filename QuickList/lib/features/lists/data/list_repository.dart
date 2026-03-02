@@ -1,4 +1,5 @@
 import 'package:todo_tasker/core/storage/hive_setup.dart';
+import 'package:todo_tasker/core/sync/sync_clock.dart';
 import 'package:todo_tasker/features/items/models/list_item.dart';
 import 'package:todo_tasker/features/lists/models/quick_list.dart';
 
@@ -19,13 +20,17 @@ class ListRepository {
   }
 
   Future<void> upsertList(QuickList list) async {
+    await HiveSetup.ensureListsBoxOpen();
     await HiveSetup.listsBox.put(list.id, list);
     await HiveSetup.listsBox.flush();
+    await SyncClock.bump();
   }
 
   Future<void> deleteList(String listId) async {
+    await HiveSetup.ensureListsBoxOpen();
     await HiveSetup.listsBox.delete(listId);
     await HiveSetup.listsBox.flush();
+    await SyncClock.bump();
   }
 
   Future<QuickList?> getByName(

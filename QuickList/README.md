@@ -27,7 +27,7 @@ Included APK architectures:
   - Allows handling boot-complete behavior used by overlay/task automation components.
 
 ## Tasker Setup
-### Option A: Plugin Action (shows in Tasker Plugin list)
+### Option A: Plugin Action (recommended)
 1. In Tasker, create/edit a Task.
 2. Add `Action` -> `Plugin` -> `QuickList Action`.
 3. Tap the edit icon.
@@ -41,19 +41,27 @@ Included APK architectures:
 3. Set `Action` to `com.quicklist.SHOW_POPUP`.
 4. Set `Package` to `com.quicklist`.
 5. Set `Target` to `Broadcast Receiver`.
-6. Add extra `list_name` with exact list name (for example `Grocery`).
+6. Add extra `list_id` (preferred) or `list_name`.
 7. Run the Task.
 
 Behavior:
 - If the list exists and has items, QuickList opens the overlay popup with that list.
 - If the list is missing or empty, QuickList sends broadcast reply:
   - `com.quicklist.LIST_EMPTY`
-  - with extra `list_name`.
+  - with extras `list_id` and/or `list_name`.
+- Optional success reply:
+  - `com.quicklist.LIST_SHOWN` with `list_id` and `list_name`.
 
-Optional success reply:
-- `com.quicklist.LIST_SHOWN` with `list_name` when popup is shown.
+## Overlay Behavior
+- Popup shows selected list with live check/uncheck support.
+- Changes from app and popup sync through shared sync clock + refresh flow.
+- Popup can be minimized to a notification and restored from notification tap.
+- Back press on popup minimizes it.
+
+## Known Android Limitation
+- The system "overlay is active" foreground-service notification cannot be fully removed while overlay is running on modern Android versions.
 
 ## Android Notes
 - Overlay permission is requested on first popup call.
-- Required permissions and receiver declarations are already added in `AndroidManifest.xml`.
-- If Tasker does not show new plugins immediately, force stop/reopen Tasker after installing the app.
+- Required permissions and receiver declarations are added in `AndroidManifest.xml`.
+- If Tasker does not show new plugins immediately, force stop/reopen Tasker after installing app.

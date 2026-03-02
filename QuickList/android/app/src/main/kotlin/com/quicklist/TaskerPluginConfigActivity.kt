@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -15,10 +16,17 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONArray
+import org.json.JSONObject
 
 class TaskerPluginConfigActivity : Activity() {
+    private data class ListEntry(
+        val id: String,
+        val name: String,
+    )
+
     private lateinit var listSpinner: Spinner
-    private var availableLists: List<String> = emptyList()
+    private var availableEntries: List<ListEntry> = emptyList()
+    private var selectedIndex: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,7 +43,7 @@ class TaskerPluginConfigActivity : Activity() {
             setPadding(dp(20), statusBarInsetPx() + dp(20), dp(20), dp(20))
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.WRAP_CONTENT,
             )
         }
 
@@ -44,7 +52,7 @@ class TaskerPluginConfigActivity : Activity() {
             textSize = 30f
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.WRAP_CONTENT,
             )
         }
 
@@ -53,7 +61,7 @@ class TaskerPluginConfigActivity : Activity() {
             textSize = 18f
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
                 topMargin = spacingMd
             }
@@ -64,29 +72,32 @@ class TaskerPluginConfigActivity : Activity() {
             textSize = 16f
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
                 topMargin = spacingLg
             }
         }
 
-        availableLists = readAvailableLists()
+        availableEntries = readAvailableLists()
         listSpinner = Spinner(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
                 topMargin = dp(6)
             }
         }
 
-        if (availableLists.isEmpty()) {
-            availableLists = listOf("No lists available - open QuickList app first")
+        val names = if (availableEntries.isEmpty()) {
+            listOf("No lists available - open QuickList app first")
+        } else {
+            availableEntries.map { it.name }
         }
+
         val adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_item,
-            availableLists
+            names,
         ).apply {
             setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
@@ -94,10 +105,12 @@ class TaskerPluginConfigActivity : Activity() {
         listSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(
                 parent: AdapterView<*>?,
-                view: android.view.View?,
+                view: View?,
                 position: Int,
-                id: Long
-            ) = Unit
+                id: Long,
+            ) {
+                selectedIndex = position
+            }
 
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
@@ -107,7 +120,7 @@ class TaskerPluginConfigActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                1f
+                1f,
             )
             setOnClickListener { onSavePressed() }
         }
@@ -117,7 +130,7 @@ class TaskerPluginConfigActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                1f
+                1f,
             ).apply {
                 marginEnd = dp(10)
             }
@@ -129,7 +142,7 @@ class TaskerPluginConfigActivity : Activity() {
             gravity = Gravity.CENTER_HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
                 topMargin = spacingLg
             }
@@ -146,7 +159,7 @@ class TaskerPluginConfigActivity : Activity() {
         return ScrollView(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+                ViewGroup.LayoutParams.MATCH_PARENT,
             )
             isFillViewport = true
             addView(root)
@@ -155,51 +168,75 @@ class TaskerPluginConfigActivity : Activity() {
 
     private fun prefillFromIncomingIntent(intent: Intent?) {
         val bundle = intent?.getBundleExtra(TaskerPluginConstants.EXTRA_BUNDLE)
-        val existing = bundle?.getString(MainActivity.EXTRA_LIST_NAME).orEmpty()
-        if (existing.isNotBlank()) {
-            val matchIndex = availableLists.indexOf(existing)
-            if (matchIndex >= 0) {
-                listSpinner.setSelection(matchIndex)
-            }
+        val existingId = bundle?.getString(MainActivity.EXTRA_LIST_ID).orEmpty()
+        val existingName = bundle?.getString(MainActivity.EXTRA_LIST_NAME).orEmpty()
+
+        if (availableEntries.isEmpty()) {
+            return
         }
+
+        val idMatch = availableEntries.indexOfFirst { it.id == existingId }
+        val nameMatch = availableEntries.indexOfFirst { it.name == existingName }
+        val index = when {
+            idMatch >= 0 -> idMatch
+            nameMatch >= 0 -> nameMatch
+            else -> 0
+        }
+        selectedIndex = index
+        listSpinner.setSelection(index)
     }
 
     private fun onSavePressed() {
-        val listName = listSpinner.selectedItem?.toString()?.trim().orEmpty()
-        if (listName.isBlank()) {
-            Toast.makeText(this, "Select a list", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (listName.startsWith("No lists available")) {
+        if (availableEntries.isEmpty()) {
             Toast.makeText(this, "Open QuickList app and create a list first", Toast.LENGTH_SHORT).show()
             return
         }
 
+        val entry = availableEntries.getOrNull(selectedIndex)
+        if (entry == null || entry.id.isBlank() || entry.name.isBlank()) {
+            Toast.makeText(this, "Select a list", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val pluginBundle = Bundle().apply {
-            putString(MainActivity.EXTRA_LIST_NAME, listName)
+            putString(MainActivity.EXTRA_LIST_ID, entry.id)
+            putString(MainActivity.EXTRA_LIST_NAME, entry.name)
         }
         val resultIntent = Intent().apply {
             putExtra(TaskerPluginConstants.EXTRA_BUNDLE, pluginBundle)
-            putExtra(TaskerPluginConstants.EXTRA_STRING_BLURB, "Show list: $listName")
+            putExtra(TaskerPluginConstants.EXTRA_STRING_BLURB, "Show list: ${entry.name}")
         }
 
         setResult(RESULT_OK, resultIntent)
         finish()
     }
 
-    private fun readAvailableLists(): List<String> {
+    private fun readAvailableLists(): List<ListEntry> {
         val prefs = getSharedPreferences(TaskerPluginConstants.PREFS_NAME, MODE_PRIVATE)
         val rawJson = prefs.getString(TaskerPluginConstants.PREFS_LISTS_JSON, null).orEmpty()
         if (rawJson.isBlank()) {
             return emptyList()
         }
+
         return try {
             val array = JSONArray(rawJson)
             buildList {
                 for (index in 0 until array.length()) {
-                    val value = array.optString(index).trim()
-                    if (value.isNotBlank()) {
-                        add(value)
+                    val value = array.opt(index)
+                    when (value) {
+                        is JSONObject -> {
+                            val id = value.optString("id").trim()
+                            val name = value.optString("name").trim()
+                            if (id.isNotBlank() && name.isNotBlank()) {
+                                add(ListEntry(id = id, name = name))
+                            }
+                        }
+                        is String -> {
+                            val name = value.trim()
+                            if (name.isNotBlank()) {
+                                add(ListEntry(id = name.lowercase(), name = name))
+                            }
+                        }
                     }
                 }
             }
@@ -212,7 +249,7 @@ class TaskerPluginConfigActivity : Activity() {
         return TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             value.toFloat(),
-            resources.displayMetrics
+            resources.displayMetrics,
         ).toInt()
     }
 

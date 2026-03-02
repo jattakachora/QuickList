@@ -49,131 +49,140 @@ class _ListDetailScreenState extends ConsumerState<ListDetailScreen> {
     }
     final activeList = list;
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      appBar: AppBar(
-        title: Text(activeList.name),
-        actions: [
-          IconButton(
-            tooltip: 'Clear completed',
-            onPressed: activeList.completedCount == 0
-                ? null
-                : () =>
-                    ref.read(listsProvider.notifier).clearCompleted(activeList.id),
-            icon: const Icon(Icons.cleaning_services_outlined),
-          ),
-        ],
-      ),
-      body: activeList.items.isEmpty
-          ? const EmptyState(
-              title: 'No Items Yet',
-              message: 'Use the bottom bar to add your first item.',
-            )
-          : ReorderableListView.builder(
-              padding: const EdgeInsets.only(bottom: 100),
-              itemCount: activeList.items.length,
-              onReorder: (oldIndex, newIndex) => ref
-                  .read(listsProvider.notifier)
-                  .reorderItems(
-                    listId: activeList.id,
-                    oldIndex: oldIndex,
-                    newIndex: newIndex,
-                  ),
-              itemBuilder: (context, index) {
-                final item = activeList.items[index];
-                return Dismissible(
-                  key: ValueKey(item.id),
-                  background: Container(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    child: Icon(
-                      Icons.delete_outline,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  onDismissed: (_) {
-                    ref.read(listsProvider.notifier).removeItem(
-                          listId: activeList.id,
-                          itemId: item.id,
-                        );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        duration: const Duration(seconds: 3),
-                        content: Text('"${item.title}" deleted'),
-                        action: SnackBarAction(
-                          label: 'Undo',
-                          onPressed: () {
-                            ref.read(listsProvider.notifier).addItem(
-                                  listId: activeList.id,
-                                  title: item.title,
-                                  quantity: item.quantity,
-                                  notes: item.notes,
-                                );
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                  child: ItemTile(
-                    key: ValueKey('tile_${item.id}'),
-                    item: item,
-                    onToggle: () => ref.read(listsProvider.notifier).toggleItem(
-                          listId: activeList.id,
-                          itemId: item.id,
-                        ),
-                    onTap: () => _showItemDialog(
-                      context,
-                      listId: activeList.id,
-                      item: item,
-                    ),
-                  ),
-                );
-              },
+    return PopScope(
+      onPopInvokedWithResult: (_, __) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      },
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        appBar: AppBar(
+          title: Text(activeList.name),
+          actions: [
+            IconButton(
+              tooltip: 'Clear completed',
+              onPressed: activeList.completedCount == 0
+                  ? null
+                  : () => ref
+                      .read(listsProvider.notifier)
+                      .clearCompleted(activeList.id),
+              icon: const Icon(Icons.cleaning_services_outlined),
             ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: AnimatedPadding(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-            child: Row(
-              children: [
-                IconButton.filledTonal(
-                  tooltip: 'Quantity & notes',
-                  onPressed: _showQuickOptionsSheet,
-                  icon: const Icon(Icons.add),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _quickAddController,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _sendQuickItem(activeList.id),
-                    decoration: InputDecoration(
-                      hintText:
-                          'Add item (x$_draftQuantity${_draftNotes.isNotEmpty ? ', with note' : ''})',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
+          ],
+        ),
+        body: activeList.items.isEmpty
+            ? const EmptyState(
+                title: 'No Items Yet',
+                message: 'Use the bottom bar to add your first item.',
+              )
+            : ReorderableListView.builder(
+                padding: const EdgeInsets.only(bottom: 100),
+                itemCount: activeList.items.length,
+                onReorder: (oldIndex, newIndex) => ref
+                    .read(listsProvider.notifier)
+                    .reorderItems(
+                      listId: activeList.id,
+                      oldIndex: oldIndex,
+                      newIndex: newIndex,
+                    ),
+                itemBuilder: (context, index) {
+                  final item = activeList.items[index];
+                  return Dismissible(
+                    key: ValueKey(item.id),
+                    background: Container(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      child: Icon(
+                        Icons.delete_outline,
+                        color: Theme.of(context).colorScheme.error,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
+                    ),
+                    onDismissed: (_) {
+                      ref.read(listsProvider.notifier).removeItem(
+                            listId: activeList.id,
+                            itemId: item.id,
+                          );
+                      final messenger = ScaffoldMessenger.of(context);
+                      messenger.hideCurrentSnackBar();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          duration: const Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                          content: Text('"${item.title}" deleted'),
+                          action: SnackBarAction(
+                            label: 'Undo',
+                            onPressed: () {
+                              ref.read(listsProvider.notifier).addItem(
+                                    listId: activeList.id,
+                                    title: item.title,
+                                    quantity: item.quantity,
+                                    notes: item.notes,
+                                  );
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                    child: ItemTile(
+                      key: ValueKey('tile_${item.id}'),
+                      item: item,
+                      onToggle: () => ref.read(listsProvider.notifier).toggleItem(
+                            listId: activeList.id,
+                            itemId: item.id,
+                          ),
+                      onTap: () => _showItemDialog(
+                        context,
+                        listId: activeList.id,
+                        item: item,
+                      ),
+                    ),
+                  );
+                },
+              ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: AnimatedPadding(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+              child: Row(
+                children: [
+                  IconButton.filledTonal(
+                    tooltip: 'Quantity & notes',
+                    onPressed: _showQuickOptionsSheet,
+                    icon: const Icon(Icons.add),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _quickAddController,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _sendQuickItem(activeList.id),
+                      decoration: InputDecoration(
+                        hintText:
+                            'Add item (x$_draftQuantity${_draftNotes.isNotEmpty ? ', with note' : ''})',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  tooltip: 'Send',
-                  onPressed: () => _sendQuickItem(activeList.id),
-                  icon: const Icon(Icons.send_rounded),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    tooltip: 'Send',
+                    onPressed: () => _sendQuickItem(activeList.id),
+                    icon: const Icon(Icons.send_rounded),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

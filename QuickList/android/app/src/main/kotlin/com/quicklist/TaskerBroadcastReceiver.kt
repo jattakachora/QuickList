@@ -1,4 +1,4 @@
-﻿package com.quicklist
+package com.quicklist
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -10,11 +10,16 @@ class TaskerBroadcastReceiver : BroadcastReceiver() {
             return
         }
 
+        val listId = intent.getStringExtra(MainActivity.EXTRA_LIST_ID)?.trim().orEmpty()
         val listName = intent.getStringExtra(MainActivity.EXTRA_LIST_NAME)?.trim().orEmpty()
-        if (listName.isBlank()) {
+        if (listId.isBlank() && listName.isBlank()) {
             return
         }
 
-        TaskerOverlayStarter.start(context, listName)
+        TaskerOverlayStarter.start(
+            context = context,
+            listId = listId.ifBlank { null },
+            listName = listName.ifBlank { null },
+        )
     }
 }

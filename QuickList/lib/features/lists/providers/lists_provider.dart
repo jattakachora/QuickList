@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:todo_tasker/features/items/models/list_item.dart';
 import 'package:todo_tasker/features/lists/data/list_repository.dart';
 import 'package:todo_tasker/features/lists/models/quick_list.dart';
@@ -24,8 +25,17 @@ class QuickListsNotifier extends StateNotifier<List<QuickList>> {
   static const MethodChannel _channel = MethodChannel('com.quicklist/tasker');
 
   Future<void> load() async {
-    state = await _repository.getAllLists(forceRefresh: true);
+    await _loadInternal(forceRefresh: false);
+  }
+
+  Future<void> loadFresh() async {
+    await _loadInternal(forceRefresh: true);
+  }
+
+  Future<void> _loadInternal({required bool forceRefresh}) async {
+    state = await _repository.getAllLists(forceRefresh: forceRefresh);
     await _syncTaskerCache();
+    await _pushOverlaySnapshot();
   }
 
   Future<void> createList(String name) async {
@@ -188,14 +198,49 @@ class QuickListsNotifier extends StateNotifier<List<QuickList>> {
   }
 
   Future<void> _syncTaskerCache() async {
-    final names = state.map((list) => list.name).toList(growable: false);
+    final entries = state
+        .map((list) => {'id': list.id, 'name': list.name})
+        .toList(growable: false);
     try {
       await _channel.invokeMethod<void>('updateAvailableLists', {
-        'list_names': names,
-        'lists_json': jsonEncode(names),
+        'list_entries': entries,
+        'lists_json': jsonEncode(entries),
       });
     } catch (_) {
       // Ignore channel failures when Android host isn't available.
     }
+  }
+
+  Future<void> _pushOverlaySnapshot() async {
+    try {
+      final active = await FlutterOverlayWindow.isActive();
+      if (!active) {
+        return;
+      }
+      await FlutterOverlayWindow.shareData({
+        'type': 'all_lists_snapshot',
+        'lists': state.map(_serializeList).toList(growable: false),
+      });
+    } catch (_) {
+      // Overlay or host may be unavailable; skip push updates safely.
+    }
+  }
+
+  Map<String, dynamic> _serializeList(QuickList list) {
+    return {
+      'id': list.id,
+      'name': list.name,
+      'items': list.items
+          .map(
+            (item) => {
+              'id': item.id,
+              'title': item.title,
+              'quantity': item.quantity,
+              'notes': item.notes,
+              'is_completed': item.isCompleted,
+            },
+          )
+          .toList(growable: false),
+    };
   }
 }

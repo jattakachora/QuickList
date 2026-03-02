@@ -15,7 +15,9 @@ class TaskerBridge {
 
   final ListRepository _repository = ListRepository();
   final OverlayService _overlayService = OverlayService();
+
   bool _bound = false;
+  // ignore: unused_field
   StreamSubscription<dynamic>? _overlayEventsSub;
 
   void bind() {
@@ -23,43 +25,55 @@ class TaskerBridge {
       return;
     }
     _bound = true;
+
     _overlayEventsSub = FlutterOverlayWindow.overlayListener.listen((message) {
       if (message is! Map) {
         return;
       }
       final type = message['type']?.toString();
       if (type == 'overlay_list_changed') {
-        appContainer.read(listsProvider.notifier).load();
+        appContainer.read(listsProvider.notifier).loadFresh();
       }
     });
+
     _channel.setMethodCallHandler((call) async {
-      if (call.method == 'taskerShowPopup') {
-        final listName =
-            (call.arguments as Map?)?['list_name']?.toString().trim() ?? '';
-        if (listName.isEmpty) {
-          return;
-        }
-        await _handleListPopupRequest(listName);
+      if (call.method != 'taskerShowPopup') {
+        return;
       }
+
+      final args = call.arguments as Map?;
+      final listId = args?['list_id']?.toString().trim() ?? '';
+      final listName = args?['list_name']?.toString().trim() ?? '';
+      if (listId.isEmpty && listName.isEmpty) {
+        return;
+      }
+
+      await _handleListPopupRequest(listId: listId, listName: listName);
     });
+
     unawaited(_channel.invokeMethod<void>('taskerBridgeReady'));
   }
 
-  Future<void> _handleListPopupRequest(String listName) async {
-    final list = await _repository.getByName(
-      listName,
-      forceRefresh: true,
-    );
+  Future<void> _handleListPopupRequest({
+    required String listId,
+    required String listName,
+  }) async {
+    final list = listId.isNotEmpty
+        ? await _repository.getById(listId, forceRefresh: true)
+        : await _repository.getByName(listName, forceRefresh: true);
+
     if (list == null || list.items.isEmpty) {
       await _channel.invokeMethod<void>('sendTaskerReply', {
         'action': 'com.quicklist.LIST_EMPTY',
         'list_name': listName,
+        'list_id': listId,
       });
       return;
     }
-    await _overlayService.showForListName(
-      list.name,
+
+    await _overlayService.showForTarget(
       listId: list.id,
+      listName: list.name,
       items: list.items
           .map(
             (item) => <String, dynamic>{
@@ -72,9 +86,11 @@ class TaskerBridge {
           )
           .toList(growable: false),
     );
+
     await _channel.invokeMethod<void>('sendTaskerReply', {
       'action': 'com.quicklist.LIST_SHOWN',
       'list_name': list.name,
+      'list_id': list.id,
     });
   }
 }

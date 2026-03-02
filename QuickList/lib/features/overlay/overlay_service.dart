@@ -3,15 +3,34 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class OverlayService {
   static const String targetListNameKey = 'overlay_target_list_name';
+  static const String targetListIdKey = 'overlay_target_list_id';
+  static const String targetTriggerClockKey = 'overlay_target_trigger_clock';
 
-  Future<void> showForListName(
-    String listName, {
+  Future<void> showForTarget({
     String? listId,
+    String? listName,
     List<Map<String, dynamic>>? items,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final normalized = listName.trim();
-    await prefs.setString(targetListNameKey, normalized);
+    final normalizedId = listId?.trim();
+    final normalizedName = listName?.trim();
+
+    if (normalizedId != null && normalizedId.isNotEmpty) {
+      await prefs.setString(targetListIdKey, normalizedId);
+    } else {
+      await prefs.remove(targetListIdKey);
+    }
+
+    if (normalizedName != null && normalizedName.isNotEmpty) {
+      await prefs.setString(targetListNameKey, normalizedName);
+    } else {
+      await prefs.remove(targetListNameKey);
+    }
+
+    await prefs.setInt(
+      targetTriggerClockKey,
+      DateTime.now().millisecondsSinceEpoch,
+    );
 
     final granted = await FlutterOverlayWindow.isPermissionGranted();
     if (!granted) {
@@ -37,11 +56,12 @@ class OverlayService {
       overlayTitle: 'QuickList',
       overlayContent: 'Smart list popup',
     );
+
     await Future<void>.delayed(const Duration(milliseconds: 120));
     await FlutterOverlayWindow.shareData({
       'type': 'target_snapshot',
-      'list_name': normalized,
-      'list_id': listId,
+      'list_name': normalizedName,
+      'list_id': normalizedId,
       'items': items ?? const [],
     });
   }
