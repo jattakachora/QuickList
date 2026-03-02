@@ -1,6 +1,6 @@
 # QuickList
 
-Smart Flutter list manager with Android Tasker integration and floating overlay popup support.
+Smart list manager with Android Tasker integration and floating overlay popup support.
 
 ## Download APKs
 - Latest release page: https://github.com/jattakachora/QuickList/releases/tag/latest-apk
