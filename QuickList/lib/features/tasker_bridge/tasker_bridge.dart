@@ -42,6 +42,7 @@ class TaskerBridge {
         await _handleListPopupRequest(listName);
       }
     });
+    unawaited(_channel.invokeMethod<void>('taskerBridgeReady'));
   }
 
   Future<void> _handleListPopupRequest(String listName) async {

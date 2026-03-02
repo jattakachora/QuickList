@@ -16,7 +16,8 @@ open class MainActivity : FlutterActivity() {
     }
 
     private var methodChannel: MethodChannel? = null
-    private var pendingPayload: Map<String, String>? = null
+    private var isDartBridgeReady: Boolean = false
+    private val pendingPayloads = mutableListOf<Map<String, String>>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,6 +50,12 @@ open class MainActivity : FlutterActivity() {
                 result.success(null)
                 return@setMethodCallHandler
             }
+            if (call.method == "taskerBridgeReady") {
+                isDartBridgeReady = true
+                flushPendingPayloads()
+                result.success(null)
+                return@setMethodCallHandler
+            }
             if (call.method == "updateAvailableLists") {
                 val args = call.arguments as? Map<*, *>
                 val rawLists = args?.get("list_names") as? List<*>
@@ -64,10 +71,6 @@ open class MainActivity : FlutterActivity() {
             }
             result.notImplemented()
         }
-        pendingPayload?.let {
-            sendPayloadToFlutter(it)
-            pendingPayload = null
-        }
     }
 
     private fun handleIntent(intent: Intent?) {
@@ -79,8 +82,8 @@ open class MainActivity : FlutterActivity() {
         if (listName.isBlank()) return
 
         val payload = mapOf(EXTRA_LIST_NAME to listName)
-        if (methodChannel == null) {
-            pendingPayload = payload
+        if (methodChannel == null || !isDartBridgeReady) {
+            pendingPayloads.add(payload)
         } else {
             sendPayloadToFlutter(payload)
         }
@@ -88,6 +91,17 @@ open class MainActivity : FlutterActivity() {
 
     private fun sendPayloadToFlutter(payload: Map<String, String>) {
         methodChannel?.invokeMethod("taskerShowPopup", payload)
+    }
+
+    private fun flushPendingPayloads() {
+        if (methodChannel == null || !isDartBridgeReady || pendingPayloads.isEmpty()) {
+            return
+        }
+        val queued = pendingPayloads.toList()
+        pendingPayloads.clear()
+        queued.forEach { payload ->
+            sendPayloadToFlutter(payload)
+        }
     }
 
     private fun persistTaskerListCache(listNames: List<String>) {
