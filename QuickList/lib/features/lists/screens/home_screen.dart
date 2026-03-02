@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:todo_tasker/features/lists/models/quick_list.dart';
 import 'package:todo_tasker/features/lists/providers/lists_provider.dart';
@@ -16,6 +17,17 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+  bool _overlayPermissionGranted = true;
+  bool _permissionCheckDone = false;
+  bool _permissionDialogShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPermissions(showDialogIfMissing: true);
+    });
+  }
 
   @override
   void dispose() {
@@ -32,6 +44,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(title: const Text('QuickList')),
       body: Column(
         children: [
+          if (_permissionCheckDone && !_overlayPermissionGranted)
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Overlay permission is required for Tasker popup to work in background.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.tonal(
+                    onPressed: _requestOverlayPermission,
+                    child: const Text('Grant'),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
             child: SearchBar(
@@ -99,6 +137,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         label: const Text('Add List'),
       ),
     );
+  }
+
+  Future<void> _checkPermissions({required bool showDialogIfMissing}) async {
+    final granted = await FlutterOverlayWindow.isPermissionGranted();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _overlayPermissionGranted = granted;
+      _permissionCheckDone = true;
+    });
+
+    if (showDialogIfMissing && !granted && !_permissionDialogShown && mounted) {
+      _permissionDialogShown = true;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Permission Required'),
+          content: const Text(
+            'QuickList needs "Draw over other apps" permission so Tasker can show your list popup even when QuickList is in background or closed.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Later'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _requestOverlayPermission();
+              },
+              child: const Text('Grant Permission'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _requestOverlayPermission() async {
+    final granted = await FlutterOverlayWindow.requestPermission();
+    if (granted == true) {
+      await _checkPermissions(showDialogIfMissing: false);
+    } else {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      await _checkPermissions(showDialogIfMissing: false);
+    }
   }
 
   List<QuickList> _filterLists(List<QuickList> lists, String query) {
