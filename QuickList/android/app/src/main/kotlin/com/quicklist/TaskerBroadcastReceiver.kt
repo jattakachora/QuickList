@@ -1,4 +1,4 @@
-package com.quicklist
+﻿package com.quicklist
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -15,16 +15,6 @@ class TaskerBroadcastReceiver : BroadcastReceiver() {
             return
         }
 
-        val launchIntent = Intent(context, PopupBridgeActivity::class.java).apply {
-            action = MainActivity.ACTION_SHOW_POPUP_INTERNAL
-            putExtra(MainActivity.EXTRA_LIST_NAME, listName)
-            addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_NO_ANIMATION
-            )
-        }
-        context.startActivity(launchIntent)
+        TaskerOverlayStarter.start(context, listName)
     }
 }
