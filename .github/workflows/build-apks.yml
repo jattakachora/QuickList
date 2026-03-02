@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-apks:
     runs-on: ubuntu-latest
@@ -34,12 +37,16 @@ jobs:
         working-directory: QuickList
         run: flutter build apk --release --split-per-abi
 
-      - name: Upload APK artifacts
-        uses: actions/upload-artifact@v4
+      - name: Publish APKs to GitHub Release
+        uses: ncipollo/release-action@v1
         with:
-          name: quicklist-apks
-          path: |
+          tag: latest-apk
+          name: Latest APK Build
+          body: Auto-updated split APKs built from the latest `main` branch commit.
+          artifacts: |
             QuickList/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
             QuickList/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             QuickList/build/app/outputs/flutter-apk/app-x86_64-release.apk
-          if-no-files-found: error
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
