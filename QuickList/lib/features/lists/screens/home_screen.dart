@@ -1,6 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:todo_tasker/features/lists/models/quick_list.dart';
 import 'package:todo_tasker/features/lists/providers/lists_provider.dart';
 import 'package:todo_tasker/features/lists/screens/list_detail_screen.dart';
@@ -129,9 +130,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onPressed: () => _showListDialog(
           context,
           title: 'New List',
-          onSubmit: (value) => ref.read(listsProvider.notifier).createList(
-                value,
-              ),
+          onSubmit: (name, emoji) =>
+              ref.read(listsProvider.notifier).createList(
+                    name,
+                    emoji: emoji,
+                  ),
         ),
         icon: const Icon(Icons.add),
         label: const Text('Add List'),
@@ -197,37 +200,92 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _showListDialog(
     BuildContext context, {
     required String title,
-    required Future<void> Function(String value) onSubmit,
+    required Future<void> Function(String name, String? emoji) onSubmit,
     String initial = '',
+    String? initialEmoji,
   }) async {
     final controller = TextEditingController(text: initial);
+    String? selectedEmoji = initialEmoji;
     await showDialog<void>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(title),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'List name',
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text(title),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'List name',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Emoji (optional)',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final pickedEmoji = await _showEmojiPicker(
+                              context,
+                            );
+                            if (pickedEmoji == null) {
+                              return;
+                            }
+                            setDialogState(() {
+                              selectedEmoji = pickedEmoji;
+                            });
+                          },
+                          icon: const Icon(Icons.emoji_emotions_outlined),
+                          label: Text(
+                            selectedEmoji == null
+                                ? 'Choose emoji'
+                                : 'Selected: $selectedEmoji',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Clear emoji',
+                        onPressed: selectedEmoji == null
+                            ? null
+                            : () {
+                                setDialogState(() {
+                                  selectedEmoji = null;
+                                });
+                              },
+                        icon: const Icon(Icons.clear),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  await onSubmit(controller.text, selectedEmoji);
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                await onSubmit(controller.text);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
         );
       },
     );
@@ -248,12 +306,76 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         );
       },
       onDelete: () => ref.read(listsProvider.notifier).removeList(list.id),
-      onRename: () => _showListDialog(
-        context,
-        title: 'Rename List',
-        initial: list.name,
-        onSubmit: (value) =>
-            ref.read(listsProvider.notifier).renameList(listId: list.id, name: value),
+      onRename: () {
+        final parts = _splitListDisplayName(list.name);
+        _showListDialog(
+          context,
+          title: 'Rename List',
+          initial: parts.name,
+          initialEmoji: parts.emoji,
+          onSubmit: (name, emoji) => ref.read(listsProvider.notifier).renameList(
+                listId: list.id,
+                name: name,
+                emoji: emoji,
+              ),
+        );
+      },
+    );
+  }
+
+  _ListNameParts _splitListDisplayName(String displayName) {
+    final trimmed = displayName.trim();
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.length < 2) {
+      return _ListNameParts(name: displayName, emoji: null);
+    }
+
+    final candidate = parts.first;
+    final looksLikeEmoji =
+        !RegExp(r'[0-9A-Za-z]').hasMatch(candidate) && candidate.length <= 8;
+    if (!looksLikeEmoji) {
+      return _ListNameParts(name: displayName, emoji: null);
+    }
+
+    final remainder = parts.sublist(1).join(' ').trim();
+    if (remainder.isEmpty) {
+      return _ListNameParts(name: displayName, emoji: null);
+    }
+    return _ListNameParts(name: remainder, emoji: candidate);
+  }
+
+  Future<String?> _showEmojiPicker(
+    BuildContext context,
+  ) async {
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: 360,
+          child: EmojiPicker(
+            onEmojiSelected: (_, emoji) => Navigator.pop(context, emoji.emoji),
+            config: Config(
+              height: 360,
+              checkPlatformCompatibility: true,
+              emojiViewConfig: const EmojiViewConfig(
+                columns: 8,
+                emojiSizeMax: 28,
+              ),
+              categoryViewConfig: const CategoryViewConfig(),
+              bottomActionBarConfig: BottomActionBarConfig(
+                showBackspaceButton: false,
+                showSearchViewButton: true,
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+              ),
+              skinToneConfig: const SkinToneConfig(enabled: true),
+              searchViewConfig: SearchViewConfig(
+                hintText: 'Search emoji',
+                backgroundColor: Theme.of(context).colorScheme.surface,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -273,3 +395,14 @@ class _ListCardWrapper extends StatelessWidget {
     );
   }
 }
+
+class _ListNameParts {
+  const _ListNameParts({
+    required this.name,
+    required this.emoji,
+  });
+
+  final String name;
+  final String? emoji;
+}
+

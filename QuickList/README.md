@@ -2,6 +2,25 @@
 
 Smart list manager with Android Tasker integration and floating overlay popup support.
 
+## Changes In This Version (2026-03-05)
+- Added item moving between lists from the item edit sheet (`Move to list` + `Move` action).
+- Added emoji support for list names, displayed as a prefix (example: `🎁 Gifts`).
+- Upgraded emoji selection from fixed chips to a full emoji picker.
+- Fixed bottom-sheet action buttons being hidden behind Android navigation bars in:
+  - Quick Add Options sheet
+  - Item Edit sheet
+
+## APK Build Flow (GitHub Actions)
+- Workflow file: `.github/workflows/build-apk.yml`
+- Trigger:
+  - Push to `main`
+  - Manual run via `workflow_dispatch`
+- Build command:
+  - `flutter build apk --release --split-per-abi`
+- Output artifacts:
+  - Uploaded as `quicklist-apks`
+  - Includes APKs from `build/app/outputs/flutter-apk/*.apk`
+
 ## Download APKs
 - Latest release page: https://github.com/jattakachora/QuickList/releases/tag/latest-apk
 - Quick download (always newest): https://github.com/jattakachora/QuickList/releases/latest

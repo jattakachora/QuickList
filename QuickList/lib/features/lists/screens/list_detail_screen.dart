@@ -211,12 +211,15 @@ class _ListDetailScreenState extends ConsumerState<ListDetailScreen> {
       context: context,
       isScrollControlled: true,
       builder: (context) {
+        final mediaQuery = MediaQuery.of(context);
+        final bottomInset =
+            mediaQuery.viewInsets.bottom + mediaQuery.viewPadding.bottom;
         return Padding(
           padding: EdgeInsets.fromLTRB(
             16,
             16,
             16,
-            MediaQuery.of(context).viewInsets.bottom + 16,
+            bottomInset + 16,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -274,75 +277,131 @@ class _ListDetailScreenState extends ConsumerState<ListDetailScreen> {
     required String listId,
     required QuickListItem item,
   }) async {
+    final availableLists = ref
+        .read(listsProvider)
+        .where((list) => list.id != listId)
+        .toList(growable: false);
+    String? selectedTargetListId;
     final titleController = TextEditingController(text: item.title);
     final qtyController = TextEditingController(text: '${item.quantity}');
     final notesController = TextEditingController(text: item.notes ?? '');
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            MediaQuery.of(context).viewInsets.bottom + 16,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Edit Item',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(labelText: 'Item title'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: qtyController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Quantity'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: notesController,
-                maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Notes (optional)'),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
+      builder: (sheetContext) {
+        final mediaQuery = MediaQuery.of(sheetContext);
+        final bottomInset =
+            mediaQuery.viewInsets.bottom + mediaQuery.viewPadding.bottom;
+        return StatefulBuilder(
+          builder: (context, setSheetState) => Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              bottomInset + 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Edit Item',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Item title'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: qtyController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Quantity'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: notesController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (optional)',
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () async {
-                        final qty = int.tryParse(qtyController.text.trim()) ?? 1;
-                        await ref.read(listsProvider.notifier).editItem(
-                              listId: listId,
-                              itemId: item.id,
-                              title: titleController.text,
-                              quantity: qty < 1 ? 1 : qty,
-                              notes: notesController.text,
-                            );
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                        }
-                      },
-                      child: const Text('Save'),
+                ),
+                if (availableLists.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedTargetListId,
+                    decoration: const InputDecoration(
+                      labelText: 'Move to list',
                     ),
+                    items: availableLists
+                        .map(
+                          (list) => DropdownMenuItem<String>(
+                            value: list.id,
+                            child: Text(list.name),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      setSheetState(() {
+                        selectedTargetListId = value;
+                      });
+                    },
                   ),
                 ],
-              ),
-            ],
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    if (availableLists.isNotEmpty)
+                      Expanded(
+                        child: FilledButton.tonal(
+                          onPressed: selectedTargetListId == null
+                              ? null
+                              : () async {
+                                  await ref
+                                      .read(listsProvider.notifier)
+                                      .moveItemToList(
+                                        sourceListId: listId,
+                                        destinationListId:
+                                            selectedTargetListId!,
+                                        itemId: item.id,
+                                      );
+                                  if (sheetContext.mounted) {
+                                    Navigator.pop(sheetContext);
+                                  }
+                                },
+                          child: const Text('Move'),
+                        ),
+                      ),
+                    if (availableLists.isNotEmpty) const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () async {
+                          final qty = int.tryParse(qtyController.text.trim()) ?? 1;
+                          await ref.read(listsProvider.notifier).editItem(
+                                listId: listId,
+                                itemId: item.id,
+                                title: titleController.text,
+                                quantity: qty < 1 ? 1 : qty,
+                                notes: notesController.text,
+                              );
+                          if (sheetContext.mounted) {
+                            Navigator.pop(sheetContext);
+                          }
+                        },
+                        child: const Text('Save'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       },

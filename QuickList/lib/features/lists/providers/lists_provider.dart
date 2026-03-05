@@ -38,14 +38,15 @@ class QuickListsNotifier extends StateNotifier<List<QuickList>> {
     await _pushOverlaySnapshot();
   }
 
-  Future<void> createList(String name) async {
+  Future<void> createList(String name, {String? emoji}) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
       return;
     }
+    final displayName = _composeListName(name: trimmed, emoji: emoji);
     final list = QuickList(
       id: _uuid.v4(),
-      name: trimmed,
+      name: displayName,
       items: const [],
       createdAt: DateTime.now(),
       position: _nextListPosition(),
@@ -57,12 +58,14 @@ class QuickListsNotifier extends StateNotifier<List<QuickList>> {
   Future<void> renameList({
     required String listId,
     required String name,
+    String? emoji,
   }) async {
     final list = await _repository.getById(listId);
     if (list == null || name.trim().isEmpty) {
       return;
     }
-    await _repository.upsertList(list.copyWith(name: name.trim()));
+    final displayName = _composeListName(name: name.trim(), emoji: emoji);
+    await _repository.upsertList(list.copyWith(name: displayName));
     await load();
   }
 
@@ -116,6 +119,34 @@ class QuickListsNotifier extends StateNotifier<List<QuickList>> {
       );
     }).toList();
     await _repository.upsertList(list.copyWith(items: items));
+    await load();
+  }
+
+  Future<void> moveItemToList({
+    required String sourceListId,
+    required String destinationListId,
+    required String itemId,
+  }) async {
+    if (sourceListId == destinationListId) {
+      return;
+    }
+    final sourceList = await _repository.getById(sourceListId);
+    final destinationList = await _repository.getById(destinationListId);
+    if (sourceList == null || destinationList == null) {
+      return;
+    }
+    final itemIndex = sourceList.items.indexWhere((item) => item.id == itemId);
+    if (itemIndex < 0) {
+      return;
+    }
+    final item = sourceList.items[itemIndex];
+    final updatedSourceItems = [...sourceList.items]..removeAt(itemIndex);
+    final updatedDestinationItems = [...destinationList.items, item];
+
+    await _repository.upsertList(sourceList.copyWith(items: updatedSourceItems));
+    await _repository.upsertList(
+      destinationList.copyWith(items: updatedDestinationItems),
+    );
     await load();
   }
 
@@ -195,6 +226,17 @@ class QuickListsNotifier extends StateNotifier<List<QuickList>> {
       return 0;
     }
     return state.map((list) => list.position).reduce(max) + 1;
+  }
+
+  String _composeListName({
+    required String name,
+    String? emoji,
+  }) {
+    final trimmedEmoji = emoji?.trim() ?? '';
+    if (trimmedEmoji.isEmpty) {
+      return name;
+    }
+    return '$trimmedEmoji $name';
   }
 
   Future<void> _syncTaskerCache() async {
